@@ -6,6 +6,7 @@
 #include <lauxlib.h>
 
 #include <fetch.h>
+#include "mbedtls.h"
 
 #define FETCH_IO_METATABLE "FETCH_IO*"
 #define FETCH_METATABLE "FETCH_IO*"
@@ -37,7 +38,8 @@ int l_fetch(lua_State *L, char method)
     {
         lua_pushnil(L);
         lua_pushfstring(L, "Failed to fetch '%s' - %d (%s)", url, fetchLastErrCode, fetchLastErrString);
-        return 2;
+        lua_pushinteger(L, fetchLastErrCode);
+        return 3;
     }
     
     struct LFETCH_IO * fio = lua_newuserdata(L, sizeof(struct LFETCH_IO));
@@ -61,6 +63,31 @@ int l_put(lua_State *L)
     return l_fetch(L, 'p');
 }
 
+#ifdef LIBFETCH_WITH_MBEDTLS
+int l_set_tls_option(lua_State *L) {
+    const char *_option = luaL_checkstring(L, 1);
+    // no point to bother with switch for now
+    if (strcmp(_option, "mtu") == 0) 
+    {
+        uint16_t _mtu = (uint16_t)luaL_checkinteger(L, 2);
+        mbedtls_set_mtu(_mtu);
+        return 0;
+    } 
+    else if (strcmp(_option, "readTimeout") == 0)
+    {
+        uint32_t _timeout = (uint32_t)luaL_checkinteger(L, 2);
+        mbedtls_set_read_timeout(_timeout);
+        return 0;
+    }
+    else    
+    {
+        lua_pushnil(L);
+        lua_pushfstring(L, "Unknown tls option '%s'!", _option);
+        return 2;
+    }
+}
+#endif
+
 int l_read(lua_State *L)
 {
     struct LFETCH_IO *fio = lua_touserdata(L, 1);
@@ -77,7 +104,8 @@ int l_read(lua_State *L)
     {
         lua_pushnil(L);
         lua_pushfstring(L, "Failed to fetch '%s' - %d (%s)", fio->url, fetchLastErrCode, fetchLastErrString);
-        return 2;
+        lua_pushinteger(L, fetchLastErrCode);
+        return 3;
     }
     lua_pushlstring(L, output, len);
     return 1;
@@ -99,7 +127,8 @@ int l_write(lua_State *L)
     {
         lua_pushnil(L);
         lua_pushfstring(L, "Failed to fetch '%s' - %d (%s)", fio->url, fetchLastErrCode, fetchLastErrString);
-        return 2;
+        lua_pushinteger(L, fetchLastErrCode);
+        return 3;
     }
     return 0;
 }
@@ -119,6 +148,9 @@ int l_close(lua_State *L)
 static const struct luaL_Reg lua_fetch[] = {
     {"get", l_get},
     {"put", l_put},
+#ifdef LIBFETCH_WITH_MBEDTLS
+    {"set_tls_option", l_set_tls_option},
+#endif
 
     {NULL, NULL}};
 
